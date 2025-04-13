@@ -36,6 +36,15 @@ def login_page():
         else:
             st.error("Invalid credentials")
 
+# --- Admin Home Page ---
+def admin_home():
+    st.title("🏠 Admin Home")
+    st.write("Welcome, admin. Choose an action below:")
+    if st.button("➕ Create New Form"):
+        st.session_state.admin_page = "Form Builder"
+    if st.button("📁 Assign New Project"):
+        st.session_state.admin_page = "Assign Projects"
+
 # --- Admin Form Builder ---
 def admin_form_builder():
     st.title("🛠️ Form Builder")
@@ -153,10 +162,17 @@ if not st.session_state.logged_in:
     login_page()
 else:
     if st.session_state.role == "admin":
-        menu = st.sidebar.selectbox("Select Page", ["Form Builder", "Assign Projects"])
-        if menu == "Form Builder":
+        if "admin_page" not in st.session_state:
+            st.session_state.admin_page = "Home"
+
+        menu = st.sidebar.radio("Admin Menu", ["Home", "Form Builder", "Assign Projects"])
+        st.session_state.admin_page = menu
+
+        if st.session_state.admin_page == "Home":
+            admin_home()
+        elif st.session_state.admin_page == "Form Builder":
             admin_form_builder()
-        elif menu == "Assign Projects":
+        elif st.session_state.admin_page == "Assign Projects":
             admin_project_page()
     else:
         branch_user_page()
