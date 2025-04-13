@@ -43,7 +43,7 @@ USERS = {
 }
 
 # --- Persist login using query params ---
-query_params = st.query_params()
+query_params = st.experimental_get_query_params()
 if query_params.get("username") and query_params.get("role"):
     st.session_state.logged_in = True
     st.session_state.username = query_params["username"][0]
