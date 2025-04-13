@@ -3,6 +3,14 @@ from datetime import datetime, time, date
 import sqlite3
 import json
 import pandas as pd
+from streamlit_cookies_manager import EncryptedCookieManager
+
+# Initialize cookies manager (store a secret key; you can generate one using os.urandom(16))
+cookies = EncryptedCookieManager(
+    prefix="zenput_", password="my_very_secret_key"
+)
+if not cookies.ready():
+    st.stop()
 
 # --- Setup SQLite DB ---
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
@@ -14,7 +22,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS forms (
     created_at TEXT
 )''')
 
-# "time" is a reserved keyword so we quote it.
+# "time" is reserved so we quote it.
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -32,7 +40,6 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     submitted_by TEXT,
     timestamp TEXT
 )''')
-
 conn.commit()
 
 # --- Simulated user roles (in real app, use proper auth) ---
@@ -42,15 +49,14 @@ USERS = {
     "branch02": {"password": "b02pass", "role": "branch"},
 }
 
-# --- Persistent Login using Query Parameters ---
-# Use the new st.query_params API
-params = st.query_params
-if params.get("username") and params.get("role"):
-    st.session_state.logged_in = True
-    st.session_state.username = params["username"][0]
-    st.session_state.role = params["role"][0]
-else:
-    if "logged_in" not in st.session_state:
+# --- Persistent Login using Cookies ---
+if "logged_in" not in st.session_state:
+    # If cookie exists and is valid, set session_state from cookie
+    if cookies.get("logged_in") == "true":
+        st.session_state.logged_in = True
+        st.session_state.username = cookies.get("username")
+        st.session_state.role = cookies.get("role")
+    else:
         st.session_state.logged_in = False
         st.session_state.username = ""
         st.session_state.role = ""
@@ -66,19 +72,28 @@ def login_page():
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.role = user["role"]
-            st.set_query_params(username=username, role=user["role"])
-            st.rerun()  # Refresh the app after login
+            # Save login info in cookies
+            cookies["logged_in"] = "true"
+            cookies["username"] = username
+            cookies["role"] = user["role"]
+            cookies.save()  # Save the cookies to the browser
+            st.experimental_rerun()
         else:
             st.error("Invalid credentials")
 
 # --- Logout Function ---
 def logout():
-    st.set_query_params()  # Clear query parameters
+    # Clear cookies and session state
+    cookies["logged_in"] = "false"
+    cookies["username"] = ""
+    cookies["role"] = ""
+    cookies.save()
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.rerun()  # Refresh the app after logout
+    st.experimental_rerun()
 
-# --- Admin Pages ---
+# --- (The rest of your admin and branch functions remain the same) ---
+
 def admin_home():
     st.title("🏠 Admin Home")
     st.write("Welcome, admin. Choose an action below:")
@@ -107,8 +122,7 @@ def admin_form_builder():
             q["formula"] = st.text_input(f"Formula Expression", key=f"formula_{i}")
         questions.append(q)
     if st.button("Save Form"):
-        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", 
-                  (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
+        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
         conn.commit()
         st.success("✅ Form Saved!")
 
@@ -144,7 +158,6 @@ def admin_projects_overview():
     df = pd.DataFrame(all_projects, columns=["Project Name", "Assigned To", "Form", "Days", "Time", "Start Date", "End Date"])
     st.dataframe(df)
 
-# --- Branch User Pages ---
 def branch_home():
     st.title("🏠 Branch Home")
     st.write(f"Welcome, {st.session_state.username}!")
@@ -173,7 +186,6 @@ def branch_active_projects():
         return
     selected_project = st.selectbox("Choose an Active Project", [p[0] for p in active_projects])
     selected = next(p for p in active_projects if p[0] == selected_project)
-    # Check if submission already exists:
     c.execute("SELECT * FROM submissions WHERE project = ? AND submitted_by = ?", (selected_project, st.session_state.username))
     submission = c.fetchone()
     if submission:
@@ -207,7 +219,6 @@ def branch_active_projects():
         elif q["type"] == "Email":
             responses[q["label"]] = st.text_input(q["label"], placeholder="example@email.com")
         elif q["type"] == "Photo":
-            # Use camera input for instant capture
             captured = st.camera_input(q["label"])
             if captured:
                 responses[q["label"]] = captured.name
