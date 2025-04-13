@@ -1,5 +1,37 @@
 import streamlit as st
 from datetime import datetime, time, date
+import sqlite3
+import json
+
+# --- Setup SQLite DB ---
+conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute('''CREATE TABLE IF NOT EXISTS forms (
+    form_name TEXT PRIMARY KEY,
+    questions TEXT,
+    created_at TEXT
+)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS projects (
+    project_name TEXT,
+    assigned_to TEXT,
+    form_used TEXT,
+    days TEXT,
+    time TEXT,
+    start TEXT,
+    end TEXT
+)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS submissions (
+    project TEXT,
+    form TEXT,
+    responses TEXT,
+    submitted_by TEXT,
+    timestamp TEXT
+)''')
+
+conn.commit()
 
 # --- Simulated user roles (in real app, use auth) ---
 USERS = {
@@ -8,20 +40,10 @@ USERS = {
     "branch02": {"password": "b02pass", "role": "branch"},
 }
 
-# --- Session State Init ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
-
-if "saved_forms" not in st.session_state:
-    st.session_state.saved_forms = []
-
-if "projects" not in st.session_state:
-    st.session_state.projects = []
-
-if "form_submissions" not in st.session_state:
-    st.session_state.form_submissions = []
 
 # --- Login Page ---
 def login_page():
@@ -39,7 +61,7 @@ def login_page():
         else:
             st.error("Invalid credentials")
 
-# --- Admin Home Page ---
+# --- Admin Pages ---
 def admin_home():
     st.title("🏠 Admin Home")
     st.write("Welcome, admin. Choose an action below:")
@@ -48,11 +70,8 @@ def admin_home():
     if st.button("📁 Assign New Project"):
         st.session_state.admin_page = "Assign Projects"
 
-# --- Admin Form Builder ---
 def admin_form_builder():
     st.title("🛠️ Form Builder")
-    st.write("Create a new checklist form")
-
     form_name = st.text_input("Form Name")
     num_fields = st.number_input("Number of Questions", 1, 20, 5)
 
@@ -61,42 +80,26 @@ def admin_form_builder():
     for i in range(int(num_fields)):
         q = {}
         q["label"] = st.text_input(f"Question {i+1} Text", key=f"label_{i}")
-        q["type"] = st.selectbox(
-            f"Question {i+1} Type",
-            [
-                "Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", "Rating", "Email", "Stopwatch",
-                "Photo", "Signature", "Barcode", "Video", "Document",
-                "Formula", "Location"
-            ],
-            key=f"type_{i}"
-        )
-
+        q["type"] = st.selectbox("Type", ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", "Document", "Formula", "Location"], key=f"type_{i}")
         if q["type"] == "Multiple Choice":
-            q["options"] = st.text_input(f"Options for Q{i+1} (comma-separated)", key=f"options_{i}").split(",")
+            q["options"] = st.text_input(f"Options (comma-separated)", key=f"options_{i}").split(",")
         if q["type"] == "Rating":
-            q["max_rating"] = st.slider(f"Max Rating for Q{i+1}", 1, 10, 5, key=f"rating_{i}")
+            q["max_rating"] = st.slider(f"Max Rating", 1, 10, 5, key=f"rating_{i}")
         if q["type"] == "Formula":
-            q["formula"] = st.text_input(f"Formula Expression for Q{i+1}", key=f"formula_{i}")
-
+            q["formula"] = st.text_input(f"Formula Expression", key=f"formula_{i}")
         questions.append(q)
 
     if st.button("Save Form"):
-        new_form = {
-            "form_name": form_name,
-            "questions": questions,
-            "created_at": datetime.now().strftime("%m/%d/%Y %H:%M")
-        }
-        st.session_state.saved_forms.append(new_form)
+        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
+        conn.commit()
         st.success("✅ Form Saved!")
-        st.write(new_form)
 
-# --- Admin Project Assignment ---
 def admin_project_page():
     st.title("📁 Assign Project")
-
+    c.execute("SELECT form_name FROM forms")
+    forms = [r[0] for r in c.fetchall()]
     project_name = st.text_input("Project Name")
-    available_forms = [f["form_name"] for f in st.session_state.saved_forms]
-    form_choice = st.selectbox("Choose Form to Use", available_forms if available_forms else ["No forms yet"])
+    form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
     submission_days = st.multiselect("Days of Submission", ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
     submission_time = st.time_input("Submission Time", value=time(10, 0))
     start_date = st.date_input("Start Date", value=date.today())
@@ -104,43 +107,36 @@ def admin_project_page():
     assigned_to = st.selectbox("Assign To", [u for u in USERS if USERS[u]["role"] == "branch"])
 
     if st.button("Assign Project"):
-        new_project = {
-            "project_name": project_name,
-            "assigned_to": assigned_to,
-            "form_used": form_choice,
-            "days": submission_days,
-            "time": submission_time.strftime("%H:%M"),
-            "start": start_date.strftime("%m/%d/%Y"),
-            "end": end_date.strftime("%m/%d/%Y")
-        }
-        st.session_state.projects.append(new_project)
+        c.execute("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)", (project_name, assigned_to, form_choice, json.dumps(submission_days), submission_time.strftime("%H:%M"), start_date.strftime("%m/%d/%Y"), end_date.strftime("%m/%d/%Y")))
+        conn.commit()
         st.success("📌 Project Assigned!")
-        st.write(new_project)
 
-# --- Branch User Form Filling ---
+# --- Branch Form Filling ---
 def branch_user_page():
     st.title("📝 My Projects")
-
-    my_projects = [p for p in st.session_state.projects if p["assigned_to"] == st.session_state.username]
+    c.execute("SELECT * FROM projects WHERE assigned_to = ?", (st.session_state.username,))
+    my_projects = c.fetchall()
 
     if not my_projects:
         st.info("No projects assigned to you yet.")
         return
 
-    selected_project = st.selectbox("Choose a Project", [p["project_name"] for p in my_projects])
-    selected = next(p for p in my_projects if p["project_name"] == selected_project)
-    form = next((f for f in st.session_state.saved_forms if f["form_name"] == selected["form_used"]), None)
+    selected_project = st.selectbox("Choose a Project", [p[0] for p in my_projects])
+    selected = next(p for p in my_projects if p[0] == selected_project)
+    c.execute("SELECT * FROM forms WHERE form_name = ?", (selected[2],))
+    form = c.fetchone()
 
     if not form:
         st.error("Form not found!")
         return
 
-    st.subheader(f"📋 Form: {form['form_name']}")
-    st.write(f"Submit by {selected['time']} on {', '.join(selected['days'])}")
-    st.write(f"🗓️ Active from {selected['start']} to {selected['end']}")
+    form_questions = json.loads(form[1])
+    st.subheader(f"📋 Form: {form[0]}")
+    st.write(f"Submit by {selected[4]} on {json.loads(selected[3])}")
+    st.write(f"🗓️ Active from {selected[5]} to {selected[6]}")
 
     responses = {}
-    for q in form["questions"]:
+    for q in form_questions:
         if q["type"] == "Text":
             responses[q["label"]] = st.text_input(q["label"])
         elif q["type"] == "Yes/No":
@@ -152,7 +148,7 @@ def branch_user_page():
         elif q["type"] == "Checkbox":
             responses[q["label"]] = st.checkbox(q["label"])
         elif q["type"] == "Date/Time":
-            responses[q["label"]] = st.date_input(q["label"])
+            responses[q["label"]] = st.date_input(q["label"]).strftime("%m/%d/%Y")
         elif q["type"] == "Rating":
             responses[q["label"]] = st.slider(q["label"], 1, q.get("max_rating", 5))
         elif q["type"] == "Email":
@@ -173,15 +169,15 @@ def branch_user_page():
             responses[q["label"]] = f"[{q['type']}] field here"
 
     if st.button("Submit Form"):
-        st.session_state.form_submissions.append({
-            "project": selected_project,
-            "form": form["form_name"],
-            "responses": responses,
-            "submitted_by": st.session_state.username,
-            "timestamp": datetime.now().strftime("%m/%d/%Y %H:%M")
-        })
+        c.execute("INSERT INTO submissions VALUES (?, ?, ?, ?, ?)", (
+            selected_project,
+            form[0],
+            json.dumps(responses),
+            st.session_state.username,
+            datetime.now().strftime("%m/%d/%Y %H:%M")
+        ))
+        conn.commit()
         st.success("✅ Form submitted!")
-        st.write(responses)
 
 # --- Main ---
 if not st.session_state.logged_in:
@@ -190,10 +186,8 @@ else:
     if st.session_state.role == "admin":
         if "admin_page" not in st.session_state:
             st.session_state.admin_page = "Home"
-
         menu = st.sidebar.radio("Admin Menu", ["Home", "Form Builder", "Assign Projects"])
         st.session_state.admin_page = menu
-
         if st.session_state.admin_page == "Home":
             admin_home()
         elif st.session_state.admin_page == "Form Builder":
