@@ -203,4 +203,93 @@ def branch_active_projects():
             responses[q["label"]] = st.date_input(q["label"]).strftime("%m/%d/%Y")
         elif q["type"] == "Rating":
             responses[q["label"]] = st.slider(q["label"], 1, q.get("max_rating", 5))
-        elif q["type"]
+        elif q["type"] == "Email":
+            responses[q["label"]] = st.text_input(q["label"], placeholder="example@email.com")
+        elif q["type"] == "Photo":
+            # Use camera_input to take a photo instantly on mobile
+            captured = st.camera_input(q["label"])
+            if captured:
+                responses[q["label"]] = captured.name
+                st.image(captured)
+        elif q["type"] == "Video":
+            # Use camera_input (currently works for photos; video capture support may vary)
+            captured = st.camera_input(q["label"], label_visibility="visible")
+            if captured:
+                responses[q["label"]] = captured.name
+                st.video(captured)
+        elif q["type"] == "Formula":
+            responses[q["label"]] = f"= {q.get('formula', '')}"
+        else:
+            responses[q["label"]] = f"[{q['type']}] field here"
+    if st.button("Submit Form"):
+        c.execute("INSERT INTO submissions VALUES (?, ?, ?, ?, ?)", (
+            selected_project,
+            form[0],
+            json.dumps(responses),
+            st.session_state.username,
+            datetime.now().strftime("%m/%d/%Y %H:%M")
+        ))
+        conn.commit()
+        st.success("✅ Form submitted!")
+
+def branch_submitted_projects():
+    st.subheader("📜 Submitted Projects")
+    c.execute("SELECT * FROM submissions WHERE submitted_by = ?", (st.session_state.username,))
+    submitted = c.fetchall()
+    if not submitted:
+        st.info("No submitted forms yet.")
+        return
+    for sub in submitted:
+        st.markdown(f"### 📌 {sub[0]}")
+        st.write(f"Form: {sub[1]}")
+        st.write(f"Submitted at: {sub[4]}")
+        responses = json.loads(sub[2])
+        df = pd.DataFrame(responses.items(), columns=["Question", "Response"])
+        st.dataframe(df)
+        st.download_button("📥 Download as Excel", df.to_csv(index=False).encode(), file_name=f"{sub[0]}_{sub[4].replace('/', '-')}.csv", mime="text/csv")
+        st.markdown("---")
+
+def branch_missed_submissions():
+    st.subheader("⛔ Missed Submissions")
+    c.execute("SELECT * FROM projects WHERE assigned_to = ?", (st.session_state.username,))
+    projects = c.fetchall()
+    today = date.today()
+    missed_projects = []
+    for p in projects:
+        end_dt = datetime.strptime(p[6], "%m/%d/%Y").date()
+        # If today's date is past the end date and no submission exists
+        c.execute("SELECT * FROM submissions WHERE project = ? AND submitted_by = ?", (p[0], st.session_state.username))
+        submission = c.fetchone()
+        if today > end_dt and not submission:
+            missed_projects.append(p)
+    if not missed_projects:
+        st.info("No missed submissions.")
+        return
+    for p in missed_projects:
+        st.markdown(f"### 📌 {p[0]}")
+        st.write(f"Assigned Form: {p[2]}")
+        st.write(f"Submission Deadline: {p[6]}")
+        st.markdown("---")
+
+# --- Main ---
+if not st.session_state.get("logged_in", False):
+    login_page()
+else:
+    st.sidebar.markdown(f"👋 Logged in as: **{st.session_state.username}**")
+    if st.sidebar.button("🚪 Logout"):
+        logout()
+    if st.session_state.role == "admin":
+        if "admin_page" not in st.session_state:
+            st.session_state.admin_page = "Home"
+        menu = st.sidebar.radio("Admin Menu", ["Home", "Form Builder", "Assign Projects", "Projects Overview"])
+        st.session_state.admin_page = menu
+        if st.session_state.admin_page == "Home":
+            admin_home()
+        elif st.session_state.admin_page == "Form Builder":
+            admin_form_builder()
+        elif st.session_state.admin_page == "Assign Projects":
+            admin_project_page()
+        elif st.session_state.admin_page == "Projects Overview":
+            admin_projects_overview()
+    else:
+        branch_home()
