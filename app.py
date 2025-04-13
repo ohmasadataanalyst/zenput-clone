@@ -22,7 +22,7 @@ if "projects" not in st.session_state:
 
 # --- Login Page ---
 def login_page():
-    st.title("🔐 Zenput Clone Login")
+    st.title("🔐 Zenput Clonne Login")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
