@@ -42,13 +42,6 @@ USERS = {
     "branch02": {"password": "b02pass", "role": "branch"},
 }
 
-# --- Persist login using query params ---
-query_params = st.experimental_get_query_params()
-if query_params.get("username") and query_params.get("role"):
-    st.session_state.logged_in = True
-    st.session_state.username = query_params["username"][0]
-    st.session_state.role = query_params["role"][0]
-
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
@@ -65,18 +58,15 @@ def login_page():
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.role = user["role"]
-            # Save login in query parameters to persist login on refresh:
-            st.experimental_set_query_params(username=username, role=user["role"])
-            st.experimental_rerun()
+            st.rerun()  # Refresh the app after login
         else:
             st.error("Invalid credentials")
 
 # --- Logout Function ---
 def logout():
-    st.experimental_set_query_params()  # Clear query params
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.experimental_rerun()
+    st.rerun()  # Refresh the app after logout
 
 # --- Admin Pages ---
 def admin_home():
@@ -206,13 +196,12 @@ def branch_active_projects():
         elif q["type"] == "Email":
             responses[q["label"]] = st.text_input(q["label"], placeholder="example@email.com")
         elif q["type"] == "Photo":
-            # Use camera_input to take a photo instantly on mobile
+            # Use camera_input for instant capture
             captured = st.camera_input(q["label"])
             if captured:
                 responses[q["label"]] = captured.name
                 st.image(captured)
         elif q["type"] == "Video":
-            # Use camera_input (currently works for photos; video capture support may vary)
             captured = st.camera_input(q["label"], label_visibility="visible")
             if captured:
                 responses[q["label"]] = captured.name
