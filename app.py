@@ -14,7 +14,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS forms (
     created_at TEXT
 )''')
 
-# "time" is reserved so we quote it.
+# "time" is a reserved keyword so we quote it.
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -43,7 +43,8 @@ USERS = {
 }
 
 # --- Persistent Login using Query Parameters ---
-params = st.get_query_params()
+# Use the new st.query_params API
+params = st.query_params
 if params.get("username") and params.get("role"):
     st.session_state.logged_in = True
     st.session_state.username = params["username"][0]
@@ -66,7 +67,7 @@ def login_page():
             st.session_state.username = username
             st.session_state.role = user["role"]
             st.set_query_params(username=username, role=user["role"])
-            st.rerun()
+            st.rerun()  # Refresh the app after login
         else:
             st.error("Invalid credentials")
 
@@ -75,7 +76,7 @@ def logout():
     st.set_query_params()  # Clear query parameters
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.rerun()
+    st.rerun()  # Refresh the app after logout
 
 # --- Admin Pages ---
 def admin_home():
