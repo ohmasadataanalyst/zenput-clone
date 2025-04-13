@@ -14,7 +14,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS forms (
     created_at TEXT
 )''')
 
-# Note: "time" is a reserved keyword so we put it in quotes.
+# "time" is reserved so we quote it.
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -42,10 +42,17 @@ USERS = {
     "branch02": {"password": "b02pass", "role": "branch"},
 }
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.role = ""
+# --- Persistent Login using Query Parameters ---
+params = st.get_query_params()
+if params.get("username") and params.get("role"):
+    st.session_state.logged_in = True
+    st.session_state.username = params["username"][0]
+    st.session_state.role = params["role"][0]
+else:
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.session_state.role = ""
 
 # --- Login Page ---
 def login_page():
@@ -58,15 +65,17 @@ def login_page():
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.role = user["role"]
-            st.rerun()  # Refresh the app after login
+            st.set_query_params(username=username, role=user["role"])
+            st.rerun()
         else:
             st.error("Invalid credentials")
 
 # --- Logout Function ---
 def logout():
+    st.set_query_params()  # Clear query parameters
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.rerun()  # Refresh the app after logout
+    st.rerun()
 
 # --- Admin Pages ---
 def admin_home():
@@ -97,7 +106,8 @@ def admin_form_builder():
             q["formula"] = st.text_input(f"Formula Expression", key=f"formula_{i}")
         questions.append(q)
     if st.button("Save Form"):
-        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
+        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", 
+                  (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
         conn.commit()
         st.success("✅ Form Saved!")
 
@@ -196,7 +206,7 @@ def branch_active_projects():
         elif q["type"] == "Email":
             responses[q["label"]] = st.text_input(q["label"], placeholder="example@email.com")
         elif q["type"] == "Photo":
-            # Use camera_input for instant capture
+            # Use camera input for instant capture
             captured = st.camera_input(q["label"])
             if captured:
                 responses[q["label"]] = captured.name
@@ -246,7 +256,6 @@ def branch_missed_submissions():
     missed_projects = []
     for p in projects:
         end_dt = datetime.strptime(p[6], "%m/%d/%Y").date()
-        # If today's date is past the end date and no submission exists
         c.execute("SELECT * FROM submissions WHERE project = ? AND submitted_by = ?", (p[0], st.session_state.username))
         submission = c.fetchone()
         if today > end_dt and not submission:
