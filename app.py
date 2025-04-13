@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, time
+from datetime import datetime, time, date
 
 # --- Simulated user roles (in real app, use auth) ---
 USERS = {
@@ -20,9 +20,12 @@ if "saved_forms" not in st.session_state:
 if "projects" not in st.session_state:
     st.session_state.projects = []
 
+if "form_submissions" not in st.session_state:
+    st.session_state.form_submissions = []
+
 # --- Login Page ---
 def login_page():
-    st.title("🔐 Zenput Clonne Login")
+    st.title("🔐 Zenput Clone Login")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -96,14 +99,19 @@ def admin_project_page():
     form_choice = st.selectbox("Choose Form to Use", available_forms if available_forms else ["No forms yet"])
     submission_days = st.multiselect("Days of Submission", ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
     submission_time = st.time_input("Submission Time", value=time(10, 0))
+    start_date = st.date_input("Start Date", value=date.today())
+    end_date = st.date_input("End Date", value=date.today())
+    assigned_to = st.selectbox("Assign To", [u for u in USERS if USERS[u]["role"] == "branch"])
 
     if st.button("Assign Project"):
         new_project = {
             "project_name": project_name,
-            "assigned_to": st.session_state.username,
+            "assigned_to": assigned_to,
             "form_used": form_choice,
             "days": submission_days,
-            "time": submission_time.strftime("%H:%M")
+            "time": submission_time.strftime("%H:%M"),
+            "start": start_date.strftime("%m/%d/%Y"),
+            "end": end_date.strftime("%m/%d/%Y")
         }
         st.session_state.projects.append(new_project)
         st.success("📌 Project Assigned!")
@@ -129,6 +137,7 @@ def branch_user_page():
 
     st.subheader(f"📋 Form: {form['form_name']}")
     st.write(f"Submit by {selected['time']} on {', '.join(selected['days'])}")
+    st.write(f"🗓️ Active from {selected['start']} to {selected['end']}")
 
     responses = {}
     for q in form["questions"]:
@@ -148,12 +157,29 @@ def branch_user_page():
             responses[q["label"]] = st.slider(q["label"], 1, q.get("max_rating", 5))
         elif q["type"] == "Email":
             responses[q["label"]] = st.text_input(q["label"], placeholder="example@email.com")
+        elif q["type"] == "Photo":
+            uploaded = st.file_uploader(q["label"], type=["png", "jpg", "jpeg"])
+            if uploaded:
+                responses[q["label"]] = uploaded.name
+                st.image(uploaded)
+        elif q["type"] == "Video":
+            uploaded = st.file_uploader(q["label"], type=["mp4", "mov", "avi"])
+            if uploaded:
+                responses[q["label"]] = uploaded.name
+                st.video(uploaded)
         elif q["type"] == "Formula":
             responses[q["label"]] = f"= {q.get('formula', '')}"
         else:
             responses[q["label"]] = f"[{q['type']}] field here"
 
     if st.button("Submit Form"):
+        st.session_state.form_submissions.append({
+            "project": selected_project,
+            "form": form["form_name"],
+            "responses": responses,
+            "submitted_by": st.session_state.username,
+            "timestamp": datetime.now().strftime("%m/%d/%Y %H:%M")
+        })
         st.success("✅ Form submitted!")
         st.write(responses)
 
