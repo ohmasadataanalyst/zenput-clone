@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timedelta
 import sqlite3
 import json
 import pandas as pd
@@ -8,25 +8,28 @@ import pandas as pd
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
 c = conn.cursor()
 
-# Create forms table
+# Recreate forms table
 c.execute('''CREATE TABLE IF NOT EXISTS forms (
     form_name TEXT PRIMARY KEY,
     questions TEXT,
     created_at TEXT
 )''')
 
-# Create projects table; note: "time" is reserved so we quote it.
+# New projects table with extra columns:
+# Columns: project_name, assigned_to, form_used, days, start_time, end_time, start_date, end_date, recurring_period
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
     form_used TEXT,
     days TEXT,
-    "time" TEXT,
-    start TEXT,
-    end TEXT
+    start_time TEXT,
+    end_time TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    recurring_period TEXT
 )''')
 
-# Create submissions table
+# Submissions table
 c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     project TEXT,
     form TEXT,
@@ -35,7 +38,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     timestamp TEXT
 )''')
 
-# Create a new table for user hierarchy
+# User hierarchy table
 c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
     username TEXT PRIMARY KEY,
     full_name TEXT,
@@ -45,23 +48,26 @@ c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
 )''')
 conn.commit()
 
-# Seed sample data for user hierarchy if table is empty
+# Seed sample data for user hierarchy if empty
 c.execute("SELECT COUNT(*) FROM user_hierarchy")
 if c.fetchone()[0] == 0:
     sample_users = [
         ("admin", "System Administrator", "admin", "", "admin@example.com"),
-        ("branch01", "Branch One", "branch", "admin", "branch01@example.com"),
-        ("branch02", "Branch Two", "branch", "admin", "branch02@example.com"),
-        ("branch03", "Branch Three", "branch", "branch01", "branch03@example.com")
+        ("branch01", "Restaurant Supervisor 1", "restaurant supervisor", "admin", "branch01@example.com"),
+        ("branch02", "Restaurant Supervisor 2", "restaurant supervisor", "admin", "branch02@example.com"),
+        ("branch03", "Restaurant Supervisor 3", "restaurant supervisor", "branch01", "branch03@example.com"),
+        # ... add as many as needed (assume total 32 users for restaurant supervisors)
     ]
     c.executemany("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?)", sample_users)
     conn.commit()
 
 # --- Simulated user roles (in real app, use proper auth) ---
+# For login simulation, we use a simple dictionary.
 USERS = {
     "admin": {"password": "admin123", "role": "admin"},
-    "branch01": {"password": "b01pass", "role": "branch"},
-    "branch02": {"password": "b02pass", "role": "branch"},
+    "branch01": {"password": "b01pass", "role": "restaurant supervisor"},
+    "branch02": {"password": "b02pass", "role": "restaurant supervisor"},
+    "branch03": {"password": "b03pass", "role": "restaurant supervisor"},
 }
 
 # --- Persistent Login using Query Parameters ---
@@ -109,7 +115,7 @@ def admin_home():
         st.session_state.admin_page = "Assign Projects"
     if st.button("📊 View Projects Overview"):
         st.session_state.admin_page = "Projects Overview"
-    if st.button("👥 View User Hierarchy"):
+    if st.button("👥 Manage Users"):
         st.session_state.admin_page = "Users"
 
 def admin_form_builder():
@@ -122,9 +128,9 @@ def admin_form_builder():
         q = {}
         q["label"] = st.text_input(f"Question {i+1} Text", key=f"label_{i}")
         q["type"] = st.selectbox("Type", 
-            ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", 
-             "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", 
-             "Document", "Formula", "Location"], key=f"type_{i}")
+                                 ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", 
+                                  "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", 
+                                  "Document", "Formula", "Location"], key=f"type_{i}")
         if q["type"] == "Multiple Choice":
             q["options"] = st.text_input(f"Options (comma-separated)", key=f"options_{i}").split(",")
         if q["type"] == "Rating":
@@ -144,19 +150,27 @@ def admin_project_page():
     forms = [r[0] for r in c.fetchall()]
     project_name = st.text_input("Project Name")
     form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
-    assigned_to = st.selectbox("Assign To Branch", [u for u in USERS if USERS[u]["role"] == "branch"])
+    # For assignment, allow admin to choose a role OR a specific user.
+    assigned_to = st.selectbox("Assign To (enter 'role:restaurant supervisor' to assign to all supervisors, or a username)", 
+                               list(USERS.keys()) + ["role:restaurant supervisor"])
     submission_days = st.multiselect("Days of Submission", 
-                                       ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
-    submission_time = st.time_input("Submission Time", value=time(10, 0))
-    start_date = st.date_input("Start Date", value=date.today())
-    end_date = st.date_input("End Date", value=date.today())
+                                     ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+    # Allowed submission window (start & end time)
+    start_time = st.time_input("Submission Window Start Time", value=time(1, 0))
+    end_time = st.time_input("Submission Window End Time", value=time(2, 0))
+    start_date = st.date_input("Project Start Date", value=date.today())
+    end_date = st.date_input("Project End Date", value=date.today() + timedelta(days=7))
+    recurring_period = st.selectbox("Recurring Period", 
+                                    ["One-Time", "Daily", "Weekly", "Quarterly", "Yearly"])
     if st.button("Assign Project"):
-        c.execute("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)", (
+        c.execute("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
             project_name, assigned_to, form_choice,
             json.dumps(submission_days),
-            submission_time.strftime("%H:%M"),
+            start_time.strftime("%H:%M"),
+            end_time.strftime("%H:%M"),
             start_date.strftime("%m/%d/%Y"),
-            end_date.strftime("%m/%d/%Y")
+            end_date.strftime("%m/%d/%Y"),
+            recurring_period
         ))
         conn.commit()
         st.success("📌 Project Assigned!")
@@ -168,18 +182,17 @@ def admin_projects_overview():
     if not all_projects:
         st.info("No projects assigned yet.")
         return
-    df = pd.DataFrame(all_projects, columns=["Project Name", "Assigned To", "Form", "Days", "Time", "Start Date", "End Date"])
+    columns = ["Project Name", "Assigned To", "Form", "Days", "Start Time", "End Time", "Start Date", "End Date", "Recurring"]
+    df = pd.DataFrame(all_projects, columns=columns)
     st.dataframe(df)
 
 def admin_users_tab():
     st.title("👥 User Hierarchy")
-    # Load all user hierarchy data
     c.execute("SELECT * FROM user_hierarchy")
     users = c.fetchall()
     if users:
         df = pd.DataFrame(users, columns=["Username", "Full Name", "Role", "Manager", "Email"])
         st.dataframe(df)
-        # Download button
         st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
     else:
         st.info("No user data found.")
@@ -187,7 +200,7 @@ def admin_users_tab():
     st.subheader("Add New User")
     new_username = st.text_input("Username", key="new_username")
     new_full_name = st.text_input("Full Name", key="new_full_name")
-    new_role = st.selectbox("Role", ["admin", "branch"], key="new_role")
+    new_role = st.selectbox("Role", ["admin", "restaurant supervisor", "branch"], key="new_role")
     new_manager = st.text_input("Manager (if any)", key="new_manager")
     new_email = st.text_input("Email", key="new_email")
     if st.button("Add User"):
@@ -214,21 +227,38 @@ def branch_home():
 
 def branch_active_projects():
     st.subheader("📋 Active Projects")
-    c.execute("SELECT * FROM projects WHERE assigned_to = ?", (st.session_state.username,))
-    projects = c.fetchall()
+    # Get projects assigned to this branch user either directly or by role
+    c.execute("SELECT * FROM projects")
+    all_projects = c.fetchall()
+    branch_projects = []
+    for p in all_projects:
+        assigned = p[1]  # assigned_to column
+        if assigned.startswith("role:"):
+            role = assigned.split("role:")[1]
+            # Check if current user's role matches
+            if st.session_state.role == role:
+                branch_projects.append(p)
+        elif assigned == st.session_state.username:
+            branch_projects.append(p)
     today = date.today()
+    current_time = datetime.now().time()
     active_projects = []
-    for p in projects:
-        start_dt = datetime.strptime(p[5], "%m/%d/%Y").date()
-        end_dt = datetime.strptime(p[6], "%m/%d/%Y").date()
+    for p in branch_projects:
+        start_dt = datetime.strptime(p[6], "%m/%d/%Y").date()
+        end_dt = datetime.strptime(p[7], "%m/%d/%Y").date()
         allowed_days = json.loads(p[3])
+        allowed_start = datetime.strptime(p[4], "%H:%M").time()
+        allowed_end = datetime.strptime(p[5], "%H:%M").time()
         if start_dt <= today <= end_dt and today.strftime("%A") in allowed_days:
-            active_projects.append(p)
+            # Check if current time is within allowed window
+            if allowed_start <= current_time <= allowed_end:
+                active_projects.append(p)
     if not active_projects:
-        st.info("No active projects available for submission today.")
+        st.info("No active projects available for submission at this time.")
         return
     selected_project = st.selectbox("Choose an Active Project", [p[0] for p in active_projects])
     selected = next(p for p in active_projects if p[0] == selected_project)
+    # Check if submission already exists:
     c.execute("SELECT * FROM submissions WHERE project = ? AND submitted_by = ?", (selected_project, st.session_state.username))
     submission = c.fetchone()
     if submission:
@@ -241,8 +271,8 @@ def branch_active_projects():
         return
     form_questions = json.loads(form[1])
     st.subheader(f"🧾 Form: {form[0]}")
-    st.write(f"Submit by {selected[4]} on {json.loads(selected[3])}")
-    st.write(f"🗓️ Active from {selected[5]} to {selected[6]}")
+    st.write(f"Allowed submission window: {selected[4]} - {selected[5]}")
+    st.write(f"Active from {selected[6]} to {selected[7]}")
     responses = {}
     for q in form_questions:
         if q["type"] == "Text":
@@ -305,12 +335,21 @@ def branch_submitted_projects():
 
 def branch_missed_submissions():
     st.subheader("⛔ Missed Submissions")
-    c.execute("SELECT * FROM projects WHERE assigned_to = ?", (st.session_state.username,))
-    projects = c.fetchall()
+    c.execute("SELECT * FROM projects")
+    all_projects = c.fetchall()
+    branch_projects = []
+    for p in all_projects:
+        assigned = p[1]
+        if assigned.startswith("role:"):
+            role = assigned.split("role:")[1]
+            if st.session_state.role == role:
+                branch_projects.append(p)
+        elif assigned == st.session_state.username:
+            branch_projects.append(p)
     today = date.today()
     missed_projects = []
-    for p in projects:
-        end_dt = datetime.strptime(p[6], "%m/%d/%Y").date()
+    for p in branch_projects:
+        end_dt = datetime.strptime(p[7], "%m/%d/%Y").date()
         c.execute("SELECT * FROM submissions WHERE project = ? AND submitted_by = ?", (p[0], st.session_state.username))
         submission = c.fetchone()
         if today > end_dt and not submission:
@@ -321,7 +360,8 @@ def branch_missed_submissions():
     for p in missed_projects:
         st.markdown(f"### 📌 {p[0]}")
         st.write(f"Assigned Form: {p[2]}")
-        st.write(f"Submission Deadline: {p[6]}")
+        st.write(f"Submission Deadline: {p[7]}")
+        st.write(f"Recurring Period: {p[8]}")
         st.markdown("---")
 
 # --- Main ---
