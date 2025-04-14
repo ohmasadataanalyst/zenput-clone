@@ -9,22 +9,15 @@ import io
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
 c = conn.cursor()
 
-# For development, drop and re-create tables to ensure correct schema.
-# (Remove the DROP statements in production after migrating data.)
-c.execute("DROP TABLE IF EXISTS forms")
-c.execute("DROP TABLE IF EXISTS projects")
-c.execute("DROP TABLE IF EXISTS submissions")
-c.execute("DROP TABLE IF EXISTS user_hierarchy")
-
 # Create forms table (3 columns)
-c.execute('''CREATE TABLE forms (
+c.execute('''CREATE TABLE IF NOT EXISTS forms (
     form_name TEXT PRIMARY KEY,
     questions TEXT,
     created_at TEXT
 )''')
 
 # Create projects table (9 columns)
-c.execute('''CREATE TABLE projects (
+c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
     form_used TEXT,
@@ -37,7 +30,7 @@ c.execute('''CREATE TABLE projects (
 )''')
 
 # Create submissions table (5 columns)
-c.execute('''CREATE TABLE submissions (
+c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     project TEXT,
     form TEXT,
     responses TEXT,
@@ -46,7 +39,7 @@ c.execute('''CREATE TABLE submissions (
 )''')
 
 # Create user_hierarchy table (8 columns)
-c.execute('''CREATE TABLE user_hierarchy (
+c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
     first_name TEXT,
     last_name TEXT,
     role TEXT,
@@ -62,7 +55,7 @@ conn.commit()
 def seed_user_hierarchy():
     c.execute("SELECT COUNT(*) FROM user_hierarchy")
     if c.fetchone()[0] == 0:
-        # Sample CSV data; replace with full data as needed.
+        # Use your provided hierarchy data (sample provided below; update with full data as needed)
         csv_data = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
 Accommodation,Account,Accommodation Submitter,Submitter,accommodation@aofgroup.com,9.6656E+11,1/6/2024 10:49
 Ahmed,Quttb,Admin 1,Admin,a.quttb@aofgroup.com,2.01012E+11,2/23/2025 12:04
@@ -76,7 +69,7 @@ Shawarma,Classic,Admin 1,Owner,it@aofgroup.com,,6/27/2022 21:09
 Mohammed,Albarqi,Albawasiq,Manager,m.albarqi@albawasiq.com,9.66502E+11,9/16/2024 13:20
 """
         df = pd.read_csv(io.StringIO(csv_data))
-        # Generate username by concatenating first and last names (lowercase, no spaces)
+        # Generate username by concatenating first and last names (lowercase, remove spaces)
         df["username"] = (df["First Name"].str.lower() + df["Last Name"].str.lower()).str.replace(" ", "")
         for _, row in df.iterrows():
             c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
@@ -212,6 +205,7 @@ def admin_projects_overview():
     st.title("📊 Projects Overview")
     c.execute("SELECT * FROM projects")
     all_projects = c.fetchall()
+    # Only include rows with exactly 9 columns
     valid_projects = [row for row in all_projects if len(row) == 9]
     if not valid_projects:
         st.info("No projects assigned yet or data is incomplete.")
