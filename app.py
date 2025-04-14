@@ -16,7 +16,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS forms (
     created_at TEXT
 )''')
 
-# Create projects table with 9 columns
+# Create projects table (9 columns)
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -38,7 +38,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     timestamp TEXT
 )''')
 
-# Create user_hierarchy table with 8 columns
+# Create user_hierarchy table (8 columns)
 c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
     first_name TEXT,
     last_name TEXT,
@@ -51,12 +51,12 @@ c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
 )''')
 conn.commit()
 
-# --- Seed user hierarchy data if empty ---
+# --- Seed user_hierarchy data if empty ---
 def seed_user_hierarchy():
     c.execute("SELECT COUNT(*) FROM user_hierarchy")
     if c.fetchone()[0] == 0:
-        # Replace the CSV data below with your full data if needed.
-        csv_data = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
+        # --- Provided CSV data (Admins and Area Managers) ---
+        csv_data1 = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
 Accommodation,Account,Accommodation Submitter,Submitter,accommodation@aofgroup.com,9.6656E+11,1/6/2024 10:49
 Ahmed,Quttb,Admin 1,Admin,a.quttb@aofgroup.com,2.01012E+11,2/23/2025 12:04
 Test,Test,Admin 1,Admin,falyousefi@aofgroup.com,9.66559E+11,12/30/2023 16:17
@@ -67,95 +67,9 @@ Abdullah,Alrashed,Admin 1,Admin,alrashed@shawarmaclassic.com,9.66553E+11,8/16/20
 Omar,aloraifi,Admin 1,Admin,omar@aofgroup.com,9.66504E+11,11/6/2022 13:07
 Shawarma,Classic,Admin 1,Owner,it@aofgroup.com,,6/27/2022 21:09
 Mohammed,Albarqi,Albawasiq,Manager,m.albarqi@albawasiq.com,9.66502E+11,9/16/2024 13:20
-????,??????,Albawasiq,Manager,a.suliman@albawasiq.com,9.66545E+11,8/30/2023 16:09
-Mohamed ezz,Ali,Albawasiq factory 2,Manager,m.ezz@albawasiq.com,9.66583E+11,12/21/2022 22:17
-MAHER,ABOUELMAATY,Albawasiq Factory 3,Admin,m.abouelmaaty@albawasiq.com,9.66541E+11,10/22/2023 12:08
-Omar,Haider,Albawasiq Quality inspectors,Submitter,o.haider@albawasiq.com,9.66556E+11,12/3/2023 9:10
-Omar,Qasamallah,Albawasiq Quality inspectors,Submitter,o.qasamallah@albawasiq.com,9.66593E+11,12/3/2023 9:08
-Albawasiq,Security,Albawasiq security,Submitter,security@albawasiq.com,9.66556E+11,12/24/2023 8:53
-Allam,Mahmud,Area Manager,Manager,a.mahmud@aofgroup.com,9.66551E+11,1/24/2025 19:59
-Ali,Esmaeel,Area Manager,Manager,a.suliman@aofgroup.com,9.66562E+11,10/20/2024 11:27
-Sohel,Sohel,Area Manager,Manager,sohel@aofgroup.com,9.66595E+11,8/13/2024 13:40
-Helal,Aldin,Area Manager,Manager,helal@aofgroup.com,9.66541E+11,8/13/2024 13:34
-Robi,Alam,Area Manager,Manager,r.alam@aofgroup.com,9.66547E+11,1/23/2024 21:22
-Khaled,Mohamed,Area Manager,Manager,k.abdulnaby@aofgroup.com,2.01156E+11,4/17/2023 12:53
-sh,sh,Area Manager,Manager,it@shawarmaclassic.com,9.66559E+11,4/4/2023 10:30
-Aseel,Abdullah,Area Manager,Manager,a.banafe@aofgroup.com,9.665E+11,1/17/2023 14:31
-Sujan,Poudel,Area Manager,Manager,s.poudel@aofgroup.com,9.66596E+11,11/17/2022 11:14
-Mohammed,Emad,Area Manager,Manager,m.emad@aofgroup.com,9.66596E+11,9/11/2022 13:38
-Mohamed,El haoudar,Area Manager,Manager,m.alhuaydar@aofgroup.com,9.66581E+11,7/17/2022 12:02
-Islam,Mostafa,Area manager 2,Manager,i.mostafa@aofgroup.com,9.66565E+11,6/5/2023 13:40
-Subash,Poudal,Area Manager5,Submitter,subash@shawarmaclassic.com,9.66548E+11,12/10/2023 3:17
-CCTV,Department,Checking,Manager,cctvdep@aofgroup.com,9.66515E+11,12/9/2024 11:21
-Ahmed,Alminshawi,Checking,Manager,a.alminshawi@aofgroup.com,9.66512E+11,12/8/2024 13:06
-M.,Faizan,Checking,Manager,m.faizan@aofgroup.com,9.66599E+11,10/22/2024 23:39
-Tolen,Alhamdan,Checking,Manager,t.alhamdan@aofgroup.com,9.66533E+11,10/14/2024 12:05
-Seham,Alfunaysan,Checking,Manager,s.alfunaysan@aofgroup.com,9.66555E+11,10/14/2024 12:01
-Mukhtar,Ali,Checking,Manager,m.ali@aofgroup.com,9.66597E+11,7/14/2024 14:30
-Hassan,Farouq,Checking,Manager,h.farouq@aofgroup.com,9.66591E+11,4/27/2024 12:49
-Lena,Alorafe,Checking,Manager,lena@aofgroup.com,9.66558E+11,2/24/2024 13:32
-Ahmed,Khaled,Checking,Manager,a.khaled@aofgroup.com,2.01061E+11,2/17/2024 14:13
-Omar,Salahaddin,Checking,Manager,o.salahaddin@aofgroup.com,2.01122E+11,1/11/2024 9:21
-????,?????,Checking,Manager,m.alsaned@shawarmaclassic.com,9.66597E+11,9/27/2023 10:43
-customers,service,Customer service,Manager,wecare@aofgroup.com,9.66556E+11,4/21/2024 1:58
-Abdulmalik,Alghanmi,Customer service,Manager,a.alghanmi@aofgroup.com,9.66537E+11,12/14/2022 11:03
-mohamed,abdullah,Development Manager,Admin,m.abdullah@aofgroup.com,9.66549E+11,11/7/2022 8:24
-Mahmoud,Mostafa,Fianance,Manager,m.mostafa@aofgroup.com,2.01127E+11,4/13/2023 16:25
-Garatis Alnarjis,QB02,Garatees supervisor,Submitter,shawarmagaratisb02@gmail.com,9.66535E+11,8/21/2024 12:48
-Garatis As Suwaidi,QB01,Garatees supervisor,Submitter,shawarmagaratisb01@gmail.com,9.66596E+11,7/23/2024 15:50
-Mohab,Abdulmughni,HR,Manager,m.abdulmughni@aofgroup.com,9.66504E+11,8/21/2024 12:37
-Tarique,Khan,HR,Manager,t.khan@aofgroup.com,9.66546E+11,10/29/2023 12:14
-???????,???????,HR,Manager,a.hammad@aofgroup.com,9.6655E+11,1/10/2023 10:49
-Ali,Alanzi,HR,Submitter,a.alanzi@shawarmaclassic.com,9.66551E+11,10/17/2022 10:59
-????,?????,HR,Manager,m.aldamaeen@aofgroup.com,9.66537E+11,10/12/2022 15:25
-Lubda khaleej,LB02,Lubda Supervisor,Manager,b02@lubdasa.com,9.66595E+11,4/2/2024 13:13
-Lubda aqiq,LB01,Lubda Supervisor,Manager,a.alghanimi@lubdasa.com,9.66583E+11,11/27/2022 13:21
-Ahmed,Nasr,Maintenance Role,Manager,a.nasr@aofgroup.com,9.66593E+11,1/7/2024 14:35
-wagd,yousif,Maintenance Role,Manager,w.yousif@aofgroup.com,9.66531E+11,12/25/2023 23:48
-????,???????,Maintenance Role,Manager,w.alhanani@aofgroup.com,9.66594E+11,12/24/2023 12:40
-Ahmed,OMARA,Operation Manager,Admin,a.omara@aofgroup.com,9.66544E+11,7/7/2022 11:17
-Hassan,Alwusaibie,Quality Inspectors,Manager,h.alwusaibie@aofgroup.com,9.66559E+11,2/13/2025 20:59
-Ahmed,Abdelhamid,Quality Inspectors,Manager,a.ahmed@aofgroup.com,9.66548E+11,9/17/2024 13:22
-Abdullah,Alamri,Quality Inspectors,Manager,a.alamri@aofgroup.com,9.66598E+11,5/19/2024 12:58
-SAIF,Al,Quality Inspectors,Manager,s.albraiki@aofgroup.com,9.66054E+12,1/29/2024 21:55
-Abdulrheem,Quality inspector,Quality Inspectors,Manager,abdulrheem@shawarmaclassic.com,9.66556E+11,12/3/2023 9:04
-Osama,Albawasiq,Quality Inspectors,Manager,b.s.c@shawarmaclassic.com,9.6656E+11,6/18/2023 11:49
-Yasser,Yasser,Quality Inspectors,Submitter,albawasiqsecur@gmail.com,9.66536E+11,2/28/2023 15:35
-????,????,Quality Inspectors,Manager,e.hamwi@shawarmaclassic.com,9.66592E+11,11/27/2022 14:07
-ShawarmaClassicCCTV,CCTV,Quality Inspectors,Submitter,shawarmaclassiccctv9@gmail.com,9.66555E+11,11/21/2022 20:40
-URURUH,B34,Restaurant Supervisor,Submitter,aloruba@aofgroup.com,9.66557E+11,11/23/2024 14:37
-HIRJED,B33,Restaurant Supervisor,Submitter,marwa2jed@gmail.com,9.66555E+11,10/20/2024 14:25
-FAYJED,B32,Restaurant Supervisor,Submitter,faihaje@gmail.com,9.66535E+11,9/24/2024 14:27
-ANRUH,B31,Restaurant Supervisor,Submitter,classicanas@gmail.com,9.66539E+11,8/15/2024 13:06
-QADRUH,B30,Restaurant Supervisor,Submitter,sclassicqadruh@gmail.com,9.66599E+11,12/23/2023 14:54
-MAJED,B28,Restaurant Supervisor,Submitter,sclassicmajed@gmail.com,9.66597E+11,11/25/2023 18:16
-SARUH,B27,Restaurant Supervisor,Submitter,shawarmaclassicb27@gmail.com,9.66553E+11,7/31/2023 16:55
-HAJED,B26,Restaurant Supervisor,Submitter,shawarmaclassicb26@gmail.com,9.66596E+11,6/26/2023 9:22
-LBRUH,B07,Restaurant Supervisor,Submitter,shawarmaclassicb07@gmail.com,9.66555E+11,6/17/2023 21:31
-RWAHS,B25,Restaurant Supervisor,Submitter,shawarmaclassicb25@gmail.com,9.66599E+11,6/10/2023 14:43
-SFJED,B24,Restaurant Supervisor,Submitter,shawarmaclassicb24@gmail.com,9.66593E+11,4/9/2023 12:24
-SLAHS,B23,Restaurant Supervisor,Submitter,shawarmaclassicb23@gmail.com,9.66556E+11,2/19/2023 9:07
-OBJED,B22,Restaurant Supervisor,Submitter,shawarmaclassicb22@gmail.com,9.66599E+11,2/1/2023 12:34
-TKRUH,B18,Restaurant Supervisor,Submitter,shawarmaclassicb18@outlook.com,,9/6/2022 2:21
-MURUH,B19,Restaurant Supervisor,Submitter,shawarmaclassicb19@outlook.com,,9/6/2022 2:21
-KRRUH,B21,Restaurant Supervisor,Submitter,shawarmaclassicb21@gmail.com,,9/6/2022 2:21
-NRRUH,B11,Restaurant Supervisor,Submitter,shawarmaclassicB11@gmail.com,,9/6/2022 2:21
-TWRUH,B12,Restaurant Supervisor,Submitter,shawarmaclassicb12@gmail.com,,9/6/2022 2:21
-RBRUH,B14,Restaurant Supervisor,Submitter,shawarmaB14@gmail.com,,9/6/2022 2:21
-NDRUH,B15,Restaurant Supervisor,Submitter,shawarmaclassicb15@gmail.com,,9/6/2022 2:21
-BDRUH,B16,Restaurant Supervisor,Submitter,shawarmaclassicb16@gmail.com,,9/6/2022 2:21
-QRRUH,B17,Restaurant Supervisor,Submitter,Shawarmaclassicb17@outlook.com,,9/6/2022 2:21
-NSRUH,B04,Restaurant Supervisor,Submitter,shawarmaclassicb04@gmail.com,,9/6/2022 2:21
-RAWRUH,B05,Restaurant Supervisor,Submitter,shawarmaclassicB33@gmail.com,,9/6/2022 2:21
-DARUH,B06,Restaurant Supervisor,Submitter,shawarmaclassicB6@gmail.com,,9/6/2022 2:21
-SWRUH,B08,Restaurant Supervisor,Submitter,shawarmaclassicB8@gmail.com,,9/6/2022 2:21
-AZRUH,B09,Restaurant Supervisor,Submitter,shawarmaclassicB9@gmail.com,,9/6/2022 2:21
-SHRUH,B10,Restaurant Supervisor,Submitter,shawarmaclassicB10@gmail.com,,9/6/2022 2:21
-KHRUH,B02,Restaurant Supervisor,Submitter,shawarmaclassick@gmail.com,,9/6/2022 2:21
-GHRUH,B03,Restaurant Supervisor,Submitter,shawarmaclassicb03@gmail.com,,9/6/2022 2:21
-AQRUH,B13,Restaurant Supervisor,Submitter,shawarmab13@gmail.com,9.66555E+11,9/28/2022 18:21
-NURUH,B01,Restaurant Supervisor,Submitter,shawarmaclassicn@gmail.com,9.66583E+11,7/7/2022 9:55
-First Name,Last Name,Role,Permission,Email,Phone,Date Joined
+"""
+        # --- Provided CSV data (Sales Man Team) ---
+        csv_data2 = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
 Mohanad,Alshthly,Sales Man Team,Manager,cashvan@albawasiq.com,9.66556E+11,1/9/2025 14:01
 H.,Alsamani,Sales Man Team,Manager,h.alsamani@albawasiq.com,9.66512E+11,9/30/2024 13:41
 M.,Hashim,Sales Man Team,Manager,m.hashim@albawasiq.com,9.66594E+11,9/30/2024 13:28
@@ -163,33 +77,33 @@ Alsadeq,Alsadeq,Submitter,Submitter,shc.accommodation@gmail.com,9.66557E+11,1/23
 Abdulaziz,Alsalem,Submitter,Admin,a.alsalem@aofgroup.com,9.6655E+11,7/16/2022 15:15
 Naim,Trainer,Trainers,Manager,trainer2@aofgroup.com,9.66555E+11,10/8/2024 13:22
 Ananda,Trainer,Trainers,Manager,Trainer@aofgroup.com,9.66555E+11,10/6/2024 13:08
-Twesste - ??????,TW01,Twestee supervisor,Submitter,twessteb01@gmail.com,9.66596E+11,2/5/2023 9:20
+Twesste - تويستي,TW01,Twestee supervisor,Submitter,twessteb01@gmail.com,9.66596E+11,2/5/2023 9:20
 Mohd Rashid,Padhan,WH role,Manager,m.rashid@aofgroup.com,9.66559E+11,12/23/2023 14:56
-
 """
-        df = pd.read_csv(io.StringIO(csv_data))
+        # Combine the CSV data (you can append more blocks as needed)
+        combined_csv = csv_data1 + csv_data2
+        df = pd.read_csv(io.StringIO(combined_csv))
         # Generate username by concatenating first and last names (lowercase, no spaces)
         df["username"] = (df["First Name"].str.lower() + df["Last Name"].str.lower()).str.replace(" ", "")
         for _, row in df.iterrows():
-            c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
-                row["First Name"], row["Last Name"], row["Role"], row["Permission"],
-                row["Email"], row["Phone"], row["Date Joined"], row["username"]
-            ))
+            # If any value is missing, fill with an empty string
+            values = [str(row[col]) if pd.notnull(row[col]) else "" for col in 
+                      ["First Name", "Last Name", "Role", "Permission", "Email", "Phone", "Date Joined", "username"]]
+            c.execute("INSERT OR REPLACE INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", tuple(values))
         conn.commit()
 
 seed_user_hierarchy()
 
-# --- Build USERS dictionary automatically from DB for seeded users ---
+# --- Build USERS dictionary from DB (with default password "pass") ---
 def build_users_dict():
     c.execute("SELECT username, role FROM user_hierarchy")
     rows = c.fetchall()
     users_dict = {}
     for username, role in rows:
-        # Assign a default password "pass" to each seeded user
         users_dict[username] = {"password": "pass", "role": role}
     # Ensure admin is present with known credentials
     users_dict["admin"] = {"password": "admin123", "role": "admin"}
-    # Also add some explicit branch supervisors if not already present:
+    # Add explicit branch supervisors (if not in hierarchy)
     users_dict["branch01"] = {"password": "b01pass", "role": "restaurant supervisor"}
     users_dict["branch02"] = {"password": "b02pass", "role": "restaurant supervisor"}
     users_dict["branch03"] = {"password": "b03pass", "role": "restaurant supervisor"}
