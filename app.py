@@ -9,15 +9,22 @@ import io
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
 c = conn.cursor()
 
-# Create forms table
-c.execute('''CREATE TABLE IF NOT EXISTS forms (
+# For development, drop and re-create tables to ensure correct schema.
+# (Remove these DROP statements in production after migrating data.)
+c.execute("DROP TABLE IF EXISTS forms")
+c.execute("DROP TABLE IF EXISTS projects")
+c.execute("DROP TABLE IF EXISTS submissions")
+c.execute("DROP TABLE IF EXISTS user_hierarchy")
+
+# Create forms table (3 columns)
+c.execute('''CREATE TABLE forms (
     form_name TEXT PRIMARY KEY,
     questions TEXT,
     created_at TEXT
 )''')
 
-# Create projects table with submission window and recurring period
-c.execute('''CREATE TABLE IF NOT EXISTS projects (
+# Create projects table (9 columns)
+c.execute('''CREATE TABLE projects (
     project_name TEXT,
     assigned_to TEXT,
     form_used TEXT,
@@ -29,8 +36,8 @@ c.execute('''CREATE TABLE IF NOT EXISTS projects (
     recurring_period TEXT
 )''')
 
-# Create submissions table
-c.execute('''CREATE TABLE IF NOT EXISTS submissions (
+# Create submissions table (5 columns)
+c.execute('''CREATE TABLE submissions (
     project TEXT,
     form TEXT,
     responses TEXT,
@@ -38,8 +45,8 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     timestamp TEXT
 )''')
 
-# Create user hierarchy table with 7 columns plus a generated username
-c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
+# Create user_hierarchy table (8 columns)
+c.execute('''CREATE TABLE user_hierarchy (
     first_name TEXT,
     last_name TEXT,
     role TEXT,
@@ -55,7 +62,7 @@ conn.commit()
 def seed_user_hierarchy():
     c.execute("SELECT COUNT(*) FROM user_hierarchy")
     if c.fetchone()[0] == 0:
-        # Sample CSV data (update this string with the full data as needed)
+        # Replace the CSV data below with your full hierarchy data as needed.
         csv_data = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
 Accommodation,Account,Accommodation Submitter,Submitter,accommodation@aofgroup.com,9.6656E+11,1/6/2024 10:49
 Ahmed,Quttb,Admin 1,Admin,a.quttb@aofgroup.com,2.01012E+11,2/23/2025 12:04
@@ -69,7 +76,7 @@ Shawarma,Classic,Admin 1,Owner,it@aofgroup.com,,6/27/2022 21:09
 Mohammed,Albarqi,Albawasiq,Manager,m.albarqi@albawasiq.com,9.66502E+11,9/16/2024 13:20
 """
         df = pd.read_csv(io.StringIO(csv_data))
-        # Generate username by concatenating first and last names (lowercase, no spaces)
+        # Ensure that the CSV has exactly 7 columns. Then generate the username.
         df["username"] = (df["First Name"].str.lower() + df["Last Name"].str.lower()).str.replace(" ", "")
         for _, row in df.iterrows():
             c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
@@ -86,7 +93,7 @@ USERS = {
     "ahmedquttb": {"password": "pass1", "role": "Admin 1"},
     "testtest": {"password": "pass2", "role": "Admin 1"},
     "abdulkarimalarifi": {"password": "pass3", "role": "Manager"},
-    # Sample restaurant supervisors
+    # Sample restaurant supervisors:
     "branch01": {"password": "b01pass", "role": "restaurant supervisor"},
     "branch02": {"password": "b02pass", "role": "restaurant supervisor"},
     "branch03": {"password": "b03pass", "role": "restaurant supervisor"},
@@ -201,29 +208,34 @@ def admin_projects_overview():
     st.title("📊 Projects Overview")
     c.execute("SELECT * FROM projects")
     all_projects = c.fetchall()
-    # Only include rows with exactly 9 columns
+    # Only include rows with 9 columns
     valid_projects = [row for row in all_projects if len(row) == 9]
     if not valid_projects:
         st.info("No projects assigned yet or data is incomplete.")
         return
     cols = ["Project Name", "Assigned To", "Form", "Days", "Start Time", "End Time", "Start Date", "End Date", "Recurring"]
-    df = pd.DataFrame(valid_projects, columns=cols)
-    st.dataframe(df)
+    try:
+        df = pd.DataFrame(valid_projects, columns=cols)
+        st.dataframe(df)
+    except Exception as e:
+        st.error(f"Projects Overview Data error: {e}")
 
 def admin_users_tab():
     st.title("👥 User Hierarchy")
     c.execute("SELECT * FROM user_hierarchy")
     users = c.fetchall()
-    if users:
+    # Expecting 8 columns per row
+    valid_users = [row for row in users if len(row) == 8]
+    if valid_users:
         cols = ["First Name", "Last Name", "Role", "Permission", "Email", "Phone", "Date Joined", "Username"]
         try:
-            df = pd.DataFrame(users, columns=cols)
+            df = pd.DataFrame(valid_users, columns=cols)
             st.dataframe(df)
             st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
         except Exception as e:
-            st.error(f"Data error: {e}")
+            st.error(f"Users Data error: {e}")
     else:
-        st.info("No user data found.")
+        st.info("No valid user data found.")
     
     st.subheader("Add New User")
     new_first = st.text_input("First Name", key="new_first")
