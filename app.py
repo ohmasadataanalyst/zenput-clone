@@ -171,6 +171,9 @@ def admin_project_page():
     c.execute("SELECT form_name FROM forms")
     forms = [r[0] for r in c.fetchall()]
     project_name = st.text_input("Project Name")
+    if not project_name.strip():
+        st.error("Please enter a valid project name.")
+        return
     form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
     assigned_to = st.selectbox("Assign To (enter 'role:restaurant supervisor' to assign to all supervisors or choose a username)", 
                                list(USERS.keys()) + ["role:restaurant supervisor"])
@@ -198,7 +201,7 @@ def admin_projects_overview():
     st.title("📊 Projects Overview")
     c.execute("SELECT * FROM projects")
     all_projects = c.fetchall()
-    # Filter rows that have exactly 9 columns
+    # Only include rows with exactly 9 columns
     valid_projects = [row for row in all_projects if len(row) == 9]
     if not valid_projects:
         st.info("No projects assigned yet or data is incomplete.")
@@ -211,15 +214,16 @@ def admin_users_tab():
     st.title("👥 User Hierarchy")
     c.execute("SELECT * FROM user_hierarchy")
     users = c.fetchall()
-    # Expecting 8 columns per row
-    valid_users = [row for row in users if len(row) == 8]
-    if valid_users:
+    if users:
         cols = ["First Name", "Last Name", "Role", "Permission", "Email", "Phone", "Date Joined", "Username"]
-        df = pd.DataFrame(valid_users, columns=cols)
-        st.dataframe(df)
-        st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
+        try:
+            df = pd.DataFrame(users, columns=cols)
+            st.dataframe(df)
+            st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
+        except Exception as e:
+            st.error(f"Data error: {e}")
     else:
-        st.info("No valid user data found.")
+        st.info("No user data found.")
     
     st.subheader("Add New User")
     new_first = st.text_input("First Name", key="new_first")
