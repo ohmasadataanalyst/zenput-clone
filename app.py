@@ -3,26 +3,19 @@ from datetime import datetime, time, date
 import sqlite3
 import json
 import pandas as pd
-from streamlit_cookies_manager import EncryptedCookieManager
-
-# Initialize cookies manager (store a secret key; you can generate one using os.urandom(16))
-cookies = EncryptedCookieManager(
-    prefix="zenput_", password="my_very_secret_key"
-)
-if not cookies.ready():
-    st.stop()
 
 # --- Setup SQLite DB ---
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
 c = conn.cursor()
 
+# Create forms table
 c.execute('''CREATE TABLE IF NOT EXISTS forms (
     form_name TEXT PRIMARY KEY,
     questions TEXT,
     created_at TEXT
 )''')
 
-# "time" is reserved so we quote it.
+# Create projects table; note: "time" is reserved so we quote it.
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -33,6 +26,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS projects (
     end TEXT
 )''')
 
+# Create submissions table
 c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     project TEXT,
     form TEXT,
@@ -40,7 +34,28 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     submitted_by TEXT,
     timestamp TEXT
 )''')
+
+# Create a new table for user hierarchy
+c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
+    username TEXT PRIMARY KEY,
+    full_name TEXT,
+    role TEXT,
+    manager TEXT,
+    email TEXT
+)''')
 conn.commit()
+
+# Seed sample data for user hierarchy if table is empty
+c.execute("SELECT COUNT(*) FROM user_hierarchy")
+if c.fetchone()[0] == 0:
+    sample_users = [
+        ("admin", "System Administrator", "admin", "", "admin@example.com"),
+        ("branch01", "Branch One", "branch", "admin", "branch01@example.com"),
+        ("branch02", "Branch Two", "branch", "admin", "branch02@example.com"),
+        ("branch03", "Branch Three", "branch", "branch01", "branch03@example.com")
+    ]
+    c.executemany("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?)", sample_users)
+    conn.commit()
 
 # --- Simulated user roles (in real app, use proper auth) ---
 USERS = {
@@ -49,14 +64,14 @@ USERS = {
     "branch02": {"password": "b02pass", "role": "branch"},
 }
 
-# --- Persistent Login using Cookies ---
-if "logged_in" not in st.session_state:
-    # If cookie exists and is valid, set session_state from cookie
-    if cookies.get("logged_in") == "true":
-        st.session_state.logged_in = True
-        st.session_state.username = cookies.get("username")
-        st.session_state.role = cookies.get("role")
-    else:
+# --- Persistent Login using Query Parameters ---
+params = st.query_params
+if params.get("username") and params.get("role"):
+    st.session_state.logged_in = True
+    st.session_state.username = params["username"][0]
+    st.session_state.role = params["role"][0]
+else:
+    if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
         st.session_state.username = ""
         st.session_state.role = ""
@@ -72,28 +87,19 @@ def login_page():
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.role = user["role"]
-            # Save login info in cookies
-            cookies["logged_in"] = "true"
-            cookies["username"] = username
-            cookies["role"] = user["role"]
-            cookies.save()  # Save the cookies to the browser
-            st.experimental_rerun()
+            st.set_query_params(username=username, role=user["role"])
+            st.rerun()
         else:
             st.error("Invalid credentials")
 
 # --- Logout Function ---
 def logout():
-    # Clear cookies and session state
-    cookies["logged_in"] = "false"
-    cookies["username"] = ""
-    cookies["role"] = ""
-    cookies.save()
+    st.set_query_params()  # Clear query parameters
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.experimental_rerun()
+    st.rerun()
 
-# --- (The rest of your admin and branch functions remain the same) ---
-
+# --- Admin Pages ---
 def admin_home():
     st.title("🏠 Admin Home")
     st.write("Welcome, admin. Choose an action below:")
@@ -103,6 +109,8 @@ def admin_home():
         st.session_state.admin_page = "Assign Projects"
     if st.button("📊 View Projects Overview"):
         st.session_state.admin_page = "Projects Overview"
+    if st.button("👥 View User Hierarchy"):
+        st.session_state.admin_page = "Users"
 
 def admin_form_builder():
     st.title("🛠️ Form Builder")
@@ -113,7 +121,10 @@ def admin_form_builder():
     for i in range(int(num_fields)):
         q = {}
         q["label"] = st.text_input(f"Question {i+1} Text", key=f"label_{i}")
-        q["type"] = st.selectbox("Type", ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", "Document", "Formula", "Location"], key=f"type_{i}")
+        q["type"] = st.selectbox("Type", 
+            ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", 
+             "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", 
+             "Document", "Formula", "Location"], key=f"type_{i}")
         if q["type"] == "Multiple Choice":
             q["options"] = st.text_input(f"Options (comma-separated)", key=f"options_{i}").split(",")
         if q["type"] == "Rating":
@@ -122,7 +133,8 @@ def admin_form_builder():
             q["formula"] = st.text_input(f"Formula Expression", key=f"formula_{i}")
         questions.append(q)
     if st.button("Save Form"):
-        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
+        c.execute("INSERT OR REPLACE INTO forms VALUES (?, ?, ?)", 
+                  (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
         conn.commit()
         st.success("✅ Form Saved!")
 
@@ -133,7 +145,8 @@ def admin_project_page():
     project_name = st.text_input("Project Name")
     form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
     assigned_to = st.selectbox("Assign To Branch", [u for u in USERS if USERS[u]["role"] == "branch"])
-    submission_days = st.multiselect("Days of Submission", ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+    submission_days = st.multiselect("Days of Submission", 
+                                       ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
     submission_time = st.time_input("Submission Time", value=time(10, 0))
     start_date = st.date_input("Start Date", value=date.today())
     end_date = st.date_input("End Date", value=date.today())
@@ -158,6 +171,36 @@ def admin_projects_overview():
     df = pd.DataFrame(all_projects, columns=["Project Name", "Assigned To", "Form", "Days", "Time", "Start Date", "End Date"])
     st.dataframe(df)
 
+def admin_users_tab():
+    st.title("👥 User Hierarchy")
+    # Load all user hierarchy data
+    c.execute("SELECT * FROM user_hierarchy")
+    users = c.fetchall()
+    if users:
+        df = pd.DataFrame(users, columns=["Username", "Full Name", "Role", "Manager", "Email"])
+        st.dataframe(df)
+        # Download button
+        st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
+    else:
+        st.info("No user data found.")
+    
+    st.subheader("Add New User")
+    new_username = st.text_input("Username", key="new_username")
+    new_full_name = st.text_input("Full Name", key="new_full_name")
+    new_role = st.selectbox("Role", ["admin", "branch"], key="new_role")
+    new_manager = st.text_input("Manager (if any)", key="new_manager")
+    new_email = st.text_input("Email", key="new_email")
+    if st.button("Add User"):
+        try:
+            c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?)", 
+                      (new_username, new_full_name, new_role, new_manager, new_email))
+            conn.commit()
+            st.success("User added successfully!")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# --- Branch User Pages ---
 def branch_home():
     st.title("🏠 Branch Home")
     st.write(f"Welcome, {st.session_state.username}!")
@@ -291,7 +334,7 @@ else:
     if st.session_state.role == "admin":
         if "admin_page" not in st.session_state:
             st.session_state.admin_page = "Home"
-        menu = st.sidebar.radio("Admin Menu", ["Home", "Form Builder", "Assign Projects", "Projects Overview"])
+        menu = st.sidebar.radio("Admin Menu", ["Home", "Form Builder", "Assign Projects", "Projects Overview", "Users"])
         st.session_state.admin_page = menu
         if st.session_state.admin_page == "Home":
             admin_home()
@@ -301,5 +344,7 @@ else:
             admin_project_page()
         elif st.session_state.admin_page == "Projects Overview":
             admin_projects_overview()
+        elif st.session_state.admin_page == "Users":
+            admin_users_tab()
     else:
         branch_home()
