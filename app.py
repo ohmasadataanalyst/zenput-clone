@@ -10,7 +10,7 @@ conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
 c = conn.cursor()
 
 # For development, drop and re-create tables to ensure correct schema.
-# (Remove these DROP statements in production after migrating data.)
+# (Remove the DROP statements in production after migrating data.)
 c.execute("DROP TABLE IF EXISTS forms")
 c.execute("DROP TABLE IF EXISTS projects")
 c.execute("DROP TABLE IF EXISTS submissions")
@@ -62,7 +62,7 @@ conn.commit()
 def seed_user_hierarchy():
     c.execute("SELECT COUNT(*) FROM user_hierarchy")
     if c.fetchone()[0] == 0:
-        # Replace the CSV data below with your full hierarchy data as needed.
+        # Sample CSV data; replace with full data as needed.
         csv_data = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
 Accommodation,Account,Accommodation Submitter,Submitter,accommodation@aofgroup.com,9.6656E+11,1/6/2024 10:49
 Ahmed,Quttb,Admin 1,Admin,a.quttb@aofgroup.com,2.01012E+11,2/23/2025 12:04
@@ -76,7 +76,7 @@ Shawarma,Classic,Admin 1,Owner,it@aofgroup.com,,6/27/2022 21:09
 Mohammed,Albarqi,Albawasiq,Manager,m.albarqi@albawasiq.com,9.66502E+11,9/16/2024 13:20
 """
         df = pd.read_csv(io.StringIO(csv_data))
-        # Ensure that the CSV has exactly 7 columns. Then generate the username.
+        # Generate username by concatenating first and last names (lowercase, no spaces)
         df["username"] = (df["First Name"].str.lower() + df["Last Name"].str.lower()).str.replace(" ", "")
         for _, row in df.iterrows():
             c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
@@ -172,16 +172,20 @@ def admin_form_builder():
                   (form_name, json.dumps(questions), datetime.now().strftime("%m/%d/%Y %H:%M")))
         conn.commit()
         st.success("✅ Form Saved!")
+        st.write("Current forms:", c.execute("SELECT * FROM forms").fetchall())
 
 def admin_project_page():
     st.title("📁 Assign Project")
     c.execute("SELECT form_name FROM forms")
     forms = [r[0] for r in c.fetchall()]
+    if not forms:
+        st.error("No forms available. Please create a form first.")
+        return
     project_name = st.text_input("Project Name")
     if not project_name.strip():
         st.error("Please enter a valid project name.")
         return
-    form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
+    form_choice = st.selectbox("Choose Form to Use", forms)
     assigned_to = st.selectbox("Assign To (enter 'role:restaurant supervisor' to assign to all supervisors or choose a username)", 
                                list(USERS.keys()) + ["role:restaurant supervisor"])
     submission_days = st.multiselect("Days of Submission", 
@@ -208,7 +212,6 @@ def admin_projects_overview():
     st.title("📊 Projects Overview")
     c.execute("SELECT * FROM projects")
     all_projects = c.fetchall()
-    # Only include rows with 9 columns
     valid_projects = [row for row in all_projects if len(row) == 9]
     if not valid_projects:
         st.info("No projects assigned yet or data is incomplete.")
@@ -252,7 +255,7 @@ def admin_users_tab():
                       (new_first, new_last, new_role, new_permission, new_email, new_phone, new_date_joined, new_username))
             conn.commit()
             st.success("User added successfully!")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
