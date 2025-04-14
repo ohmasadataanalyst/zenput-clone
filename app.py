@@ -198,13 +198,16 @@ def admin_users_tab():
     st.title("👥 User Hierarchy")
     c.execute("SELECT * FROM user_hierarchy")
     users = c.fetchall()
-    if users:
+    # Expected columns count is 8
+    expected_cols = 8
+    valid_users = [row for row in users if len(row) == expected_cols]
+    if valid_users:
         cols = ["First Name", "Last Name", "Role", "Permission", "Email", "Phone", "Date Joined", "Username"]
-        df = pd.DataFrame(users, columns=cols)
+        df = pd.DataFrame(valid_users, columns=cols)
         st.dataframe(df)
         st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "user_hierarchy.csv", "text/csv")
     else:
-        st.info("No user data found.")
+        st.info("No valid user data found.")
     
     st.subheader("Add New User")
     new_first = st.text_input("First Name", key="new_first")
@@ -224,6 +227,7 @@ def admin_users_tab():
             st.experimental_rerun()
         except Exception as e:
             st.error(f"Error: {e}")
+
 
 # --- Branch User Pages ---
 def branch_home():
