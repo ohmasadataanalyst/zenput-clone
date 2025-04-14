@@ -3,6 +3,7 @@ from datetime import datetime, time, date, timedelta
 import sqlite3
 import json
 import pandas as pd
+import io
 
 # --- Setup SQLite DB ---
 conn = sqlite3.connect("zenput_data.db", check_same_thread=False)
@@ -15,7 +16,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS forms (
     created_at TEXT
 )''')
 
-# Create projects table with two time columns for submission window
+# Create projects table with submission window (start and end times) and recurring period
 c.execute('''CREATE TABLE IF NOT EXISTS projects (
     project_name TEXT,
     assigned_to TEXT,
@@ -37,7 +38,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS submissions (
     timestamp TEXT
 )''')
 
-# Create user hierarchy table with full columns
+# Create user hierarchy table with 7 columns + generated username
 c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
     first_name TEXT,
     last_name TEXT,
@@ -50,34 +51,48 @@ c.execute('''CREATE TABLE IF NOT EXISTS user_hierarchy (
 )''')
 conn.commit()
 
-# Seed sample data for user hierarchy if empty
-c.execute("SELECT COUNT(*) FROM user_hierarchy")
-if c.fetchone()[0] == 0:
-    sample_users = [
-        ("Accommodation", "Account", "Accommodation Submitter", "Submitter", "accommodation@aofgroup.com", "9.6656E+11", "1/6/2024 10:49", "accom_account"),
-        ("Ahmed", "Quttb", "Admin 1", "Admin", "a.quttb@aofgroup.com", "2.01012E+11", "2/23/2025 12:04", "ahmed_q"),
-        ("Test", "Test", "Admin 1", "Admin", "falyousefi@aofgroup.com", "9.66559E+11", "12/30/2023 16:17", "test_test"),
-        ("Abdulkarim", "Alarifi", "Admin 1", "Manager", "alorifi_k@aofgroup.com", "9.66544E+11", "4/18/2023 21:22", "abdulkarim"),
-        ("Ahmed", "Abduldim", "Admin 1", "Manager", "a.abduldim@aofgroup.com", "9.66537E+11", "3/21/2023 11:11", "ahmed_abduldim"),
-        ("Faisal", "ALarifi", "Admin 1", "Admin", "faisal@aofgroup.com", "9.66544E+11", "10/18/2022 16:08", "faisal"),
-        # ... add more rows as needed
-    ]
-    c.executemany("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sample_users)
-    conn.commit()
+# --- Seed user hierarchy data if empty ---
+def seed_user_hierarchy():
+    c.execute("SELECT COUNT(*) FROM user_hierarchy")
+    if c.fetchone()[0] == 0:
+        # Sample CSV data (replace with full data as needed)
+        data = """First Name,Last Name,Role,Permission,Email,Phone,Date Joined
+Accommodation,Account,Accommodation Submitter,Submitter,accommodation@aofgroup.com,9.6656E+11,1/6/2024 10:49
+Ahmed,Quttb,Admin 1,Admin,a.quttb@aofgroup.com,2.01012E+11,2/23/2025 12:04
+Test,Test,Admin 1,Admin,falyousefi@aofgroup.com,9.66559E+11,12/30/2023 16:17
+Abdulkarim,Alarifi,Admin 1,Manager,alorifi_k@aofgroup.com,9.66544E+11,4/18/2023 21:22
+Ahmed,Abduldim,Admin 1,Manager,a.abduldim@aofgroup.com,9.66537E+11,3/21/2023 11:11
+Faisal,ALarifi,Admin 1,Admin,faisal@aofgroup.com,9.66544E+11,10/18/2022 16:08
+Abdullah,Alrashed,Admin 1,Admin,alrashed@shawarmaclassic.com,9.66553E+11,8/16/2022 12:32
+Omar,aloraifi,Admin 1,Admin,omar@aofgroup.com,9.66504E+11,11/6/2022 13:07
+Shawarma,Classic,Admin 1,Owner,it@aofgroup.com,,6/27/2022 21:09
+Mohammed,Albarqi,Albawasiq,Manager,m.albarqi@albawasiq.com,9.66502E+11,9/16/2024 13:20
+"""
+        df = pd.read_csv(io.StringIO(data))
+        # Generate a username by concatenating first and last names (lowercase, no spaces)
+        df["username"] = (df["First Name"].str.lower() + df["Last Name"].str.lower()).str.replace(" ", "")
+        # Insert rows into the user_hierarchy table
+        for _, row in df.iterrows():
+            c.execute("INSERT INTO user_hierarchy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
+                row["First Name"], row["Last Name"], row["Role"], row["Permission"],
+                row["Email"], row["Phone"], row["Date Joined"], row["username"]
+            ))
+        conn.commit()
 
-# --- Simulated user roles (for login simulation) ---
-# For simplicity, we'll use the hierarchy usernames for login.
-# (In a real app, authentication would be more secure.)
+seed_user_hierarchy()
+
+# --- Simulated user roles for login ---
+# We'll use the username from user_hierarchy where available.
 USERS = {
     "admin": {"password": "admin123", "role": "admin"},
-    "ahmed_q": {"password": "pass1", "role": "Admin 1"},
-    "test_test": {"password": "pass2", "role": "Admin 1"},
-    "abdulkarim": {"password": "pass3", "role": "Manager"},
-    # For restaurant supervisors, assume role "restaurant supervisor"
+    "ahmedquttb": {"password": "pass1", "role": "Admin 1"},
+    "testtest": {"password": "pass2", "role": "Admin 1"},
+    "abdulkarimalarifi": {"password": "pass3", "role": "Manager"},
+    # Restaurant supervisors sample:
     "branch01": {"password": "b01pass", "role": "restaurant supervisor"},
     "branch02": {"password": "b02pass", "role": "restaurant supervisor"},
     "branch03": {"password": "b03pass", "role": "restaurant supervisor"},
-    # ... add others as needed
+    # ... add additional USERS as needed
 }
 
 # --- Persistent Login using Query Parameters ---
@@ -138,9 +153,9 @@ def admin_form_builder():
         q = {}
         q["label"] = st.text_input(f"Question {i+1} Text", key=f"label_{i}")
         q["type"] = st.selectbox("Type", 
-                                 ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", 
-                                  "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", 
-                                  "Document", "Formula", "Location"], key=f"type_{i}")
+            ["Text", "Yes/No", "Multiple Choice", "Number", "Checkbox", "Date/Time", 
+             "Rating", "Email", "Stopwatch", "Photo", "Signature", "Barcode", "Video", 
+             "Document", "Formula", "Location"], key=f"type_{i}")
         if q["type"] == "Multiple Choice":
             q["options"] = st.text_input(f"Options (comma-separated)", key=f"options_{i}").split(",")
         if q["type"] == "Rating":
@@ -160,8 +175,8 @@ def admin_project_page():
     forms = [r[0] for r in c.fetchall()]
     project_name = st.text_input("Project Name")
     form_choice = st.selectbox("Choose Form to Use", forms if forms else ["No forms yet"])
-    # Allow assignment by role or username
-    assigned_to = st.selectbox("Assign To (enter 'role:restaurant supervisor' to assign to all supervisors or a username)", 
+    # Allow assignment by a role or individual username.
+    assigned_to = st.selectbox("Assign To (type 'role:restaurant supervisor' to assign to all supervisors or choose a username)", 
                                list(USERS.keys()) + ["role:restaurant supervisor"])
     submission_days = st.multiselect("Days of Submission", 
                                      ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
@@ -198,9 +213,8 @@ def admin_users_tab():
     st.title("👥 User Hierarchy")
     c.execute("SELECT * FROM user_hierarchy")
     users = c.fetchall()
-    # Expected columns count is 8
-    expected_cols = 8
-    valid_users = [row for row in users if len(row) == expected_cols]
+    # Each row should have 8 columns
+    valid_users = [row for row in users if len(row) == 8]
     if valid_users:
         cols = ["First Name", "Last Name", "Role", "Permission", "Email", "Phone", "Date Joined", "Username"]
         df = pd.DataFrame(valid_users, columns=cols)
@@ -227,7 +241,6 @@ def admin_users_tab():
             st.experimental_rerun()
         except Exception as e:
             st.error(f"Error: {e}")
-
 
 # --- Branch User Pages ---
 def branch_home():
@@ -265,7 +278,6 @@ def branch_active_projects():
         allowed_start = datetime.strptime(p[4], "%H:%M").time()
         allowed_end = datetime.strptime(p[5], "%H:%M").time()
         if start_dt <= today <= end_dt and today.strftime("%A") in allowed_days:
-            # Check if current time is within allowed window
             if allowed_start <= current_time <= allowed_end:
                 active_projects.append(p)
     if not active_projects:
